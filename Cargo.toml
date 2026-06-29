@@ -1,0 +1,7 @@
+[package]
+name = "rltbl_db_row"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rltbl_db = { git = "https://github.com/rltbl/rltbl_db", branch = "main" }
