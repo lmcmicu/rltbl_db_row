@@ -17,8 +17,6 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
 
     println!("DATA: {:#?}", ast.data);
 
-    // TODO: Look at the code for rust's Clone macro for hints.
-
     let fields = match &ast.data {
         syn::Data::Struct(data_struct) => &data_struct.fields,
         _ => panic!("Invalid data"),
@@ -28,18 +26,18 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
         _ => panic!("Invalid fields"),
     };
 
-    let mut field_names = vec![];
-    for field in fields.named.iter() {
-        let field_ident = field.ident.clone().unwrap();
-        println!("FIELD IDENT: {field_ident:?}");
-        field_names.push(field_ident.to_string());
-    }
-    println!("FIELD_NAMES: {field_names:#?}");
+    let named = fields
+        .named
+        .iter()
+        .map(|f| f.ident.clone().unwrap())
+        .collect::<Vec<_>>();
 
     let generated = quote! {
         impl Into<DbRow> for #name {
             fn into(self) -> DbRow {
-                DbRow::new()
+                rltbl_db::db_row! {
+                    #( stringify!(#named) => self.#named ),*
+                }
             }
         }
 
