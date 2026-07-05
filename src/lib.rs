@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::DeriveInput;
+use syn::{Data::Struct, DeriveInput, Fields::Named};
 
 #[proc_macro_derive(ConvertDbRow)]
 pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
@@ -13,35 +13,30 @@ pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
-    let name = &ast.ident;
-
-    println!("DATA: {:#?}", ast.data);
-
-    let fields = match &ast.data {
-        syn::Data::Struct(data_struct) => &data_struct.fields,
+    let type_name = &ast.ident;
+    let named = match &ast.data {
+        Struct(data_struct) => match &data_struct.fields {
+            Named(fields) => fields
+                .named
+                .iter()
+                .map(|f| f.ident.clone().unwrap())
+                .collect::<Vec<_>>(),
+            _ => panic!("Invalid fields"),
+        },
         _ => panic!("Invalid data"),
     };
-    let fields = match fields {
-        syn::Fields::Named(fields) => fields,
-        _ => panic!("Invalid fields"),
-    };
-
-    let named = fields
-        .named
-        .iter()
-        .map(|f| f.ident.clone().unwrap())
-        .collect::<Vec<_>>();
 
     let generated = quote! {
-        impl Into<DbRow> for #name {
+        impl Into<DbRow> for #type_name {
             fn into(self) -> DbRow {
+                // TODO: Handle JSON columns specially.
                 rltbl_db::db_row! {
                     #( stringify!(#named) => self.#named ),*
                 }
             }
         }
 
-        impl From<DbRow> for #name {
+        impl From<DbRow> for #type_name {
             fn from(value: DbRow) -> Self {
                 rltbl_db::serde::from_db_row(&value).unwrap()
             }
