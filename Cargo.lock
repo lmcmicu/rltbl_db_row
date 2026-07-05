@@ -948,7 +948,9 @@ dependencies = [
 name = "rltbl_db_row"
 version = "0.1.0"
 dependencies = [
+ "quote",
  "rltbl_db",
+ "syn 2.0.118",
 ]
 
 [[package]]
