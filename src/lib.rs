@@ -26,12 +26,45 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
         _ => panic!("Invalid data"),
     };
 
+    let mut named_again = vec![];
+    match &ast.data {
+        Struct(data_struct) => match &data_struct.fields {
+            Named(fields) => {
+                for field in fields.named.iter() {
+                    let field_type = match &field.ty {
+                        syn::Type::Path(path) => path
+                            .path
+                            .clone()
+                            .segments
+                            .first()
+                            .unwrap()
+                            .ident
+                            .clone()
+                            .to_string(),
+                        _ => panic!(),
+                    };
+                    let field = field.ident.clone().unwrap();
+                    let field = match field_type.as_str() {
+                        "JsonValue" => {
+                            quote! { DbValue::Json(self.#field) }
+                        }
+                        _ => {
+                            quote! { self.#field }
+                        }
+                    };
+                    named_again.push(field);
+                }
+            }
+            _ => panic!(),
+        },
+        _ => panic!(),
+    };
+
     let generated = quote! {
         impl Into<DbRow> for #type_name {
             fn into(self) -> DbRow {
-                // TODO: Handle JSON columns specially.
                 rltbl_db::db_row! {
-                    #( stringify!(#named) => self.#named ),*
+                    #( stringify!(#named) => #named_again ),*
                 }
             }
         }
@@ -42,5 +75,5 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
             }
         }
     };
-    generated.into()
+    TokenStream::from(generated)
 }

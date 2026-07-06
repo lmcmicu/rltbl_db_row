@@ -926,7 +926,7 @@ dependencies = [
 [[package]]
 name = "rltbl_db"
 version = "0.1.0"
-source = "git+https://github.com/rltbl/rltbl_db?branch=main#9d3194dcb0fdb60694ad02d5ee1b968c3d4b5ceb"
+source = "git+https://github.com/rltbl/rltbl_db?branch=test-macros#7b01a6370f125b1e2f3e4ac738ed44beea648530"
 dependencies = [
  "async-trait",
  "bytes",
