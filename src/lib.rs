@@ -1,7 +1,16 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data::Struct, DeriveInput, Field, Fields::Named, Meta, Type::Path, TypePath};
+use syn::{Data::Struct, DeriveInput, Field, Fields::Named, Meta, Type::Path};
 
+// Note that this recognizes the json_value attribute. When a field in a struct is annotated
+// this way, e.g.,
+// struct Foo {
+//   field1: usize,
+//   #[json_value]
+//   field2: serde_json::Value,
+//   ...
+// },
+// then it will be treated as a JSON value as far as this macro is concerned.
 #[proc_macro_derive(ConvertDbRow, attributes(json_value))]
 pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
     // Construct a representation of Rust code as a syntax tree
@@ -34,20 +43,17 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
             true
         } else {
             let field_type = match &field.ty {
-                Path(path) => expand_type_path(path),
+                Path(path) => path
+                    .path
+                    .segments
+                    .iter()
+                    .map(|seg| seg.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::"),
                 _ => panic!("Unsupported field type: {:?}", field.ty),
             };
             field_type == "serde_json::Value"
         }
-    }
-
-    fn expand_type_path(path: &TypePath) -> String {
-        path.path
-            .segments
-            .iter()
-            .map(|seg| seg.ident.to_string())
-            .collect::<Vec<_>>()
-            .join("::")
     }
 
     let mut sources = vec![];
