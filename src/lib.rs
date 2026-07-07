@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data::Struct, DeriveInput, Fields::Named, Type::Path, TypePath};
+use syn::{Data::Struct, DeriveInput, Field, Fields::Named, Meta, Type::Path, TypePath};
 
-#[proc_macro_derive(ConvertDbRow)]
+#[proc_macro_derive(ConvertDbRow, attributes(json_value))]
 pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
     // Construct a representation of Rust code as a syntax tree
     // that we can manipulate.
@@ -13,6 +13,34 @@ pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
+    fn is_json(field: &Field) -> bool {
+        // Look for the special "json_value" annotation:
+        let has_json_attribute = field
+            .attrs
+            .iter()
+            .map(|attr| match &attr.meta {
+                Meta::Path(path) => path
+                    .segments
+                    .iter()
+                    .any(|path| path.ident.to_string() == "json_value"),
+                _ => false,
+            })
+            .collect::<Vec<_>>()
+            .len()
+            > 0;
+
+        // If it can't be found, check if the field type is serde_json::Value:
+        if has_json_attribute {
+            true
+        } else {
+            let field_type = match &field.ty {
+                Path(path) => expand_type_path(path),
+                _ => panic!("Unsupported field type: {:?}", field.ty),
+            };
+            field_type == "serde_json::Value"
+        }
+    }
+
     fn expand_type_path(path: &TypePath) -> String {
         path.path
             .segments
@@ -28,19 +56,11 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
         Struct(data_struct) => match &data_struct.fields {
             Named(fields) => {
                 for field in fields.named.iter() {
-                    let field_type = match &field.ty {
-                        Path(path) => expand_type_path(path),
-                        _ => panic!("Unsupported field type: {:?}", field.ty),
-                    };
                     let (source_code, target_code) = {
                         let source_code = field.ident.clone().expect("No field ident");
-                        let target_code = match field_type.as_str() {
-                            "serde_json::Value" | "JsonValue" => {
-                                quote! { DbValue::Json(self.#source_code) }
-                            }
-                            _ => {
-                                quote! { self.#source_code }
-                            }
+                        let target_code = match is_json(field) {
+                            true => quote! { DbValue::Json(self.#source_code) },
+                            false => quote! { self.#source_code },
                         };
                         (source_code, target_code)
                     };
