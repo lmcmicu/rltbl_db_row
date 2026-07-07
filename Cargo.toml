@@ -7,6 +7,6 @@ edition = "2024"
 proc-macro = true
 
 [dependencies]
-rltbl_db = { git = "https://github.com/rltbl/rltbl_db", branch = "test-macros" }
+rltbl_db = { git = "https://github.com/rltbl/rltbl_db", branch = "main" }
 syn = "2.0"
 quote = "1.0"
