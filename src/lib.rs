@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data::Struct, DeriveInput, Fields::Named};
+use syn::{Data::Struct, DeriveInput, Fields::Named, Type::Path};
 
 #[proc_macro_derive(ConvertDbRow)]
 pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
@@ -13,65 +13,55 @@ pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
-    let type_name = &ast.ident;
-    let named = match &ast.data {
-        Struct(data_struct) => match &data_struct.fields {
-            Named(fields) => fields
-                .named
-                .iter()
-                .map(|f| f.ident.clone().unwrap())
-                .collect::<Vec<_>>(),
-            _ => panic!("Invalid fields"),
-        },
-        _ => panic!("Invalid data"),
-    };
-
-    let mut named_again = vec![];
+    let mut sources = vec![];
+    let mut targets = vec![];
     match &ast.data {
         Struct(data_struct) => match &data_struct.fields {
             Named(fields) => {
                 for field in fields.named.iter() {
                     let field_type = match &field.ty {
-                        syn::Type::Path(path) => path
+                        Path(path) => path
                             .path
-                            .clone()
                             .segments
                             .first()
-                            .unwrap()
-                            .ident
-                            .clone()
-                            .to_string(),
-                        _ => panic!(),
+                            .and_then(|p| Some(p.ident.to_string()))
+                            .expect("Error extracting field type"),
+                        _ => panic!("Unsupported field type: {:?}", field.ty),
                     };
-                    let field = field.ident.clone().unwrap();
-                    let field = match field_type.as_str() {
-                        "JsonValue" => {
-                            quote! { DbValue::Json(self.#field) }
-                        }
-                        _ => {
-                            quote! { self.#field }
-                        }
+                    let (source_code, target_code) = {
+                        let source_code = field.ident.clone().expect("No field ident");
+                        let target_code = match field_type.as_str() {
+                            "JsonValue" => {
+                                quote! { DbValue::Json(self.#source_code) }
+                            }
+                            _ => {
+                                quote! { self.#source_code }
+                            }
+                        };
+                        (source_code, target_code)
                     };
-                    named_again.push(field);
+                    sources.push(source_code);
+                    targets.push(target_code);
                 }
             }
-            _ => panic!(),
+            _ => panic!("Unupported data fields format"),
         },
-        _ => panic!(),
+        _ => panic!("Unsupported data format"),
     };
+    let type_name = &ast.ident;
 
     let generated = quote! {
         impl Into<DbRow> for #type_name {
             fn into(self) -> DbRow {
                 rltbl_db::db_row! {
-                    #( stringify!(#named) => #named_again ),*
+                    #( stringify!(#sources) => #targets ),*
                 }
             }
         }
 
         impl From<DbRow> for #type_name {
             fn from(value: DbRow) -> Self {
-                rltbl_db::serde::from_db_row(&value).unwrap()
+                rltbl_db::serde::from_db_row(&value).expect("Error deserializing row")
             }
         }
     };
