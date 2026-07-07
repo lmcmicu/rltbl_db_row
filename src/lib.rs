@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data::Struct, DeriveInput, Fields::Named, Type::Path};
+use syn::{Data::Struct, DeriveInput, Fields::Named, Type::Path, TypePath};
 
 #[proc_macro_derive(ConvertDbRow)]
 pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
@@ -13,6 +13,15 @@ pub fn convert_db_row_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
+    fn expand_type_path(path: &TypePath) -> String {
+        path.path
+            .segments
+            .iter()
+            .map(|seg| seg.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::")
+    }
+
     let mut sources = vec![];
     let mut targets = vec![];
     match &ast.data {
@@ -20,18 +29,13 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
             Named(fields) => {
                 for field in fields.named.iter() {
                     let field_type = match &field.ty {
-                        Path(path) => path
-                            .path
-                            .segments
-                            .first()
-                            .and_then(|p| Some(p.ident.to_string()))
-                            .expect("Error extracting field type"),
+                        Path(path) => expand_type_path(path),
                         _ => panic!("Unsupported field type: {:?}", field.ty),
                     };
                     let (source_code, target_code) = {
                         let source_code = field.ident.clone().expect("No field ident");
                         let target_code = match field_type.as_str() {
-                            "JsonValue" => {
+                            "serde_json::Value" | "JsonValue" => {
                                 quote! { DbValue::Json(self.#source_code) }
                             }
                             _ => {
