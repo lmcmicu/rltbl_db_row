@@ -56,22 +56,22 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
         }
     }
 
-    let mut sources = vec![];
-    let mut targets = vec![];
+    let mut lefts = vec![];
+    let mut rights = vec![];
     match &ast.data {
         Struct(data_struct) => match &data_struct.fields {
             Named(fields) => {
                 for field in fields.named.iter() {
-                    let (source_code, target_code) = {
-                        let source_code = field.ident.clone().expect("No field ident");
-                        let target_code = match is_json(field) {
-                            true => quote! { DbValue::Json(self.#source_code) },
-                            false => quote! { self.#source_code },
+                    let (left_code, right_code) = {
+                        let left_code = field.ident.clone().expect("No field ident");
+                        let right_code = match is_json(field) {
+                            true => quote! { DbValue::Json(self.#left_code) },
+                            false => quote! { self.#left_code },
                         };
-                        (source_code, target_code)
+                        (left_code, right_code)
                     };
-                    sources.push(source_code);
-                    targets.push(target_code);
+                    lefts.push(left_code);
+                    rights.push(right_code);
                 }
             }
             _ => panic!("Unupported data fields format"),
@@ -84,7 +84,7 @@ fn impl_convert_db_row(ast: &DeriveInput) -> TokenStream {
         impl Into<DbRow> for #type_name {
             fn into(self) -> DbRow {
                 rltbl_db::db_row! {
-                    #( stringify!(#sources) => #targets ),*
+                    #( stringify!(#lefts) => #rights ),*
                 }
             }
         }
